@@ -35,6 +35,8 @@ A raiz não é um app, ela só coordena os apps. Edite o `package.json` gerado:
 
 O pnpm 12 também adiciona `packageManager`/`devEngines`, que fixam a versão do pnpm para quem clonar o repo. Pode deixar. O `"type": "module"` só afeta arquivos `.js` da raiz; cada app tem o próprio `package.json`.
 
+Efeito colateral do `devEngines`: rodar `npm` dentro do repo falha com `EBADDEVENGINES`. É intencional; use `pnpm` (ex.: `pnpm view <pacote> version` no lugar de `npm view`).
+
 ## 3. Declarar o workspace
 
 Crie o `pnpm-workspace.yaml` na raiz:
@@ -57,7 +59,10 @@ dist
 .next
 .env
 .turbo
+*.tsbuildinfo
 ```
+
+O `*.tsbuildinfo` é o cache de build incremental do TypeScript (criado no primeiro `nest build`/`start:dev`).
 
 ## 5. Criar a API (Nest)
 
@@ -135,4 +140,5 @@ mv apps/api/.gitattributes .gitattributes
 apps/web         → Next (App Router)
 apps/api         → Nest + Prisma
 packages/shared  → schemas zod compartilhados entre web e api
+migrations/      → migrations SQL do migris (ver database.md)
 ```

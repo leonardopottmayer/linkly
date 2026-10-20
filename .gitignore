@@ -4,3 +4,6 @@ dist
 .env
 .turbo
 *.tsbuildinfo
+
+migrations/config.json
+migrations/seed/*.local.*

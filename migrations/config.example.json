@@ -1,0 +1,11 @@
+{
+  "environments": {
+    "local": {
+      "host": "localhost",
+      "port": 5433,
+      "user": "postgres",
+      "password": "postgres",
+      "database": "linkly"
+    }
+  }
+}

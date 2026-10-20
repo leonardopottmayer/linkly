@@ -35,6 +35,8 @@ The root is not an app, it only coordinates the apps. Edit the generated `packag
 
 pnpm 12 also writes `packageManager`/`devEngines`, pinning the pnpm version for anyone who clones the repo. Keep them. `"type": "module"` only affects `.js` files at the root; each app has its own `package.json`.
 
+Side effect of `devEngines`: running `npm` inside the repo fails with `EBADDEVENGINES`. That's intended; use `pnpm` (e.g. `pnpm view <pkg> version` instead of `npm view`).
+
 ## 3. Declare the workspace
 
 Create `pnpm-workspace.yaml` at the root:
@@ -57,7 +59,10 @@ dist
 .next
 .env
 .turbo
+*.tsbuildinfo
 ```
+
+`*.tsbuildinfo` is TypeScript's incremental build cache (created by the first `nest build`/`start:dev`).
 
 ## 5. Create the API (Nest)
 
@@ -135,4 +140,5 @@ mv apps/api/.gitattributes .gitattributes
 apps/web         → Next (App Router)
 apps/api         → Nest + Prisma
 packages/shared  → zod schemas shared by web and api
+migrations/      → migris SQL migrations (see database.md)
 ```
