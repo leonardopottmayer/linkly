@@ -1,0 +1,24 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["identity"]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model User {
+  id           String    @id(map: "pk_idt001") @default(dbgenerated("uuidv7()")) @db.Uuid
+  username     String    @unique(map: "uq_idt001_username") @db.VarChar(30)
+  email        String    @unique(map: "uq_idt001_email") @db.VarChar(255)
+  passwordHash String    @map("password_hash")
+  name         String    @db.VarChar(150)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("idt001_user")
+  @@schema("identity")
+}

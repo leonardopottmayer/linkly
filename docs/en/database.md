@@ -152,3 +152,135 @@ docker exec pottmayer-postgres psql -U postgres -d linkly -c "\d identity.idt001
 ```
 
 Undo the last batch (only while developing): `migris rollback local`.
+
+## 5. Install Prisma
+
+Prisma 7.10 at the time of writing. Pin the major (`@7`): npm's `latest` tag for `prisma` pointed at an 8.0 release candidate while `@prisma/client`/`@prisma/adapter-pg` were on 7.
+
+```bash
+pnpm --filter api add -D prisma@7 dotenv
+```
+
+- `prisma` (dev): the CLI (`init`, `db pull`, `generate`)
+- `dotenv`: Prisma 7 no longer loads `.env` by itself; the generated config file imports `dotenv/config`
+
+This fails with `ERR_PNPM_IGNORED_BUILDS` for `@prisma/engines` and `prisma` (they download the schema engine binary used by `db pull`). Approve both and reinstall, as in [setup.md](setup.md#err_pnpm_ignored_builds):
+
+```bash
+pnpm approve-builds
+pnpm install
+```
+
+Runtime packages:
+
+```bash
+pnpm --filter api add @prisma/client@7 @prisma/adapter-pg@7
+```
+
+- `@prisma/client`: runtime used by the generated client
+- `@prisma/adapter-pg`: since Prisma 7 the client talks to Postgres through a JS **driver adapter** (`pg`) instead of a Rust query engine
+
+## 6. `prisma init`
+
+```bash
+pnpm --filter api exec prisma init --datasource-provider postgresql --no-skills --output ../src/generated/prisma
+```
+
+- `exec`: runs the `prisma` binary installed in `api`, with `apps/api` as working directory
+- `--no-skills`: since 7.x `init` also installs AI-agent "skills" (`.claude/`, `.windsurf/`, `.agents/`, `skills-lock.json`). Not wanted here
+- `--output ../src/generated/prisma`: where `generate` writes the client (relative to `prisma/schema.prisma`). Inside `src/` so Nest compiles it with the rest
+
+Generated in `apps/api`:
+
+| File | Purpose |
+|---|---|
+| `prisma/schema.prisma` | generator + datasource (models come from `db pull`) |
+| `prisma7.config.ts` | Prisma CLI config: schema path and `DATABASE_URL` (loads `.env` via `dotenv/config`). The CLI finds it by this name |
+| `.env` | `DATABASE_URL` (gitignored) |
+| `.gitignore` | ignores `.env` and `/src/generated/prisma` |
+
+In `prisma7.config.ts`, delete the `migrations: { path: "prisma/migrations" }` block: it's for Prisma Migrate, which linkly doesn't use.
+
+In `apps/api/.env`:
+
+```
+DATABASE_URL="postgresql://postgres:postgres@localhost:5433/linkly"
+```
+
+Copy it to `apps/api/.env.example` (committed).
+
+## 7. Adjust `schema.prisma`
+
+```prisma
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["identity"]
+}
+```
+
+- `moduleFormat = "cjs"`: the API compiles to CommonJS (see [setup.md](setup.md)), so the generated client must too
+- `schemas`: which Postgres schemas Prisma sees. Without it Prisma only reads `public`, where the only table is migris's `migrations` control table. Add each new module schema here
+
+## 8. `db pull` and naming
+
+```bash
+pnpm --filter api exec prisma db pull
+```
+
+Introspects the database and writes the models into `schema.prisma`:
+
+```prisma
+model idt001_user {
+  id            String    @id(map: "pk_idt001") @default(dbgenerated("uuidv7()")) @db.Uuid
+  username      String    @unique(map: "uq_idt001_username") @db.VarChar(30)
+  email         String    @unique(map: "uq_idt001_email") @db.VarChar(255)
+  password_hash String
+  name          String    @db.VarChar(150)
+  created_at    DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime? @db.Timestamptz(6)
+
+  @@schema("identity")
+}
+```
+
+Models and fields mirror the database names. Rename them to what the TypeScript code should use, keeping the DB names in `@@map`/`@map`:
+
+```prisma
+model User {
+  id           String    @id(map: "pk_idt001") @default(dbgenerated("uuidv7()")) @db.Uuid
+  username     String    @unique(map: "uq_idt001_username") @db.VarChar(30)
+  email        String    @unique(map: "uq_idt001_email") @db.VarChar(255)
+  passwordHash String    @map("password_hash")
+  name         String    @db.VarChar(150)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("idt001_user")
+  @@schema("identity")
+}
+```
+
+- `@@map`/`@map`: TS name ↔ DB name, like `ToTable()`/`HasColumnName()` in EF Core
+- `@updatedAt`: Prisma fills `updatedAt` on every update (the DB has no trigger for it)
+- **Renames survive the next `db pull`**: Prisma reuses `@map`/`@@map`/`@updatedAt` from the existing schema and prints a warning listing what it "enriched". Expected, not an error
+- `dbgenerated("uuidv7()")`: the DB generates the id; Prisma just omits it on insert
+
+## 9. Generate the client
+
+```bash
+pnpm --filter api exec prisma generate
+```
+
+Writes the typed client to `apps/api/src/generated/prisma/` (gitignored: it's a build output). So a fresh clone gets it after `pnpm install`, add to `apps/api/package.json` scripts:
+
+```json
+"postinstall": "prisma generate"
+```
+
+`generate` is offline (reads only `schema.prisma`), so it works without the database running.
