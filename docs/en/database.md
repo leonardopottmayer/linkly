@@ -79,3 +79,76 @@ Add to the root `.gitignore`:
 migrations/config.json
 migrations/seed/*.local.*
 ```
+
+The empty `migrations/migrations/` folder isn't committed (git doesn't track empty folders); it shows up with the first migration.
+
+## 3. First migrations: `identity` module
+
+From `migrations/`:
+
+```bash
+migris create create-schema-identity --module identity
+migris create create-table-idt001-user --module identity
+```
+
+The first `--module` on an empty project switches migris to **modular mode** (every migration lives under a module folder from now on, and `--module` becomes required). Each command creates `migrations/identity/<timestamp>-<name>/` with empty `.up.sql`/`.down.sql`.
+
+`create-schema-identity`:
+
+```sql
+-- up
+CREATE SCHEMA IF NOT EXISTS identity;
+
+-- down
+DROP SCHEMA IF EXISTS identity;
+```
+
+`create-table-idt001-user`:
+
+```sql
+-- up
+CREATE TABLE identity.idt001_user (
+	id UUID NOT NULL DEFAULT uuidv7(),
+	username VARCHAR(30) NOT NULL,
+	email VARCHAR(255) NOT NULL,
+	password_hash TEXT NOT NULL,
+	name VARCHAR(150) NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+	updated_at TIMESTAMPTZ NULL
+);
+
+ALTER TABLE identity.idt001_user
+ADD CONSTRAINT pk_idt001 PRIMARY KEY (id);
+
+ALTER TABLE identity.idt001_user
+ADD CONSTRAINT uq_idt001_username UNIQUE (username);
+
+ALTER TABLE identity.idt001_user
+ADD CONSTRAINT uq_idt001_email UNIQUE (email);
+
+ALTER TABLE identity.idt001_user
+ADD CONSTRAINT ck_idt001_username CHECK (username ~ '^[a-z0-9_-]{3,30}$');
+
+-- down
+DROP TABLE identity.idt001_user;
+```
+
+- `username` is the public page URL (`linkly/leo`), so the `CHECK` keeps it lowercase and URL-safe **in the database**, whatever the app does. Reserved names (`dashboard`, `r`, …) are an app rule, not a DB one.
+- The API lowercases emails before saving, so a plain `UNIQUE` is enough.
+- No `created_by`/`updated_by` (pandora has them): users sign themselves up, there's no other author.
+- Profile data (bio, avatar, theme) is not here; it belongs to the links module.
+
+## 4. Apply
+
+```bash
+migris status local
+migris apply local
+```
+
+`status` lists pending migrations; `apply` runs them in timestamp order, as one batch. To check in the database:
+
+```bash
+docker exec pottmayer-postgres psql -U postgres -d linkly -c "\d identity.idt001_user"
+```
+
+Undo the last batch (only while developing): `migris rollback local`.

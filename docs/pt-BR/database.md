@@ -79,3 +79,76 @@ Adicione ao `.gitignore` da raiz:
 migrations/config.json
 migrations/seed/*.local.*
 ```
+
+A pasta `migrations/migrations/` vazia não entra no commit (o git não versiona pastas vazias); ela aparece junto com a primeira migration.
+
+## 3. Primeiras migrations: módulo `identity`
+
+Dentro de `migrations/`:
+
+```bash
+migris create create-schema-identity --module identity
+migris create create-table-idt001-user --module identity
+```
+
+O primeiro `--module` num projeto vazio coloca o migris em **modo modular** (daqui em diante toda migration fica dentro da pasta de um módulo, e o `--module` passa a ser obrigatório). Cada comando cria `migrations/identity/<timestamp>-<nome>/` com `.up.sql`/`.down.sql` vazios.
+
+`create-schema-identity`:
+
+```sql
+-- up
+CREATE SCHEMA IF NOT EXISTS identity;
+
+-- down
+DROP SCHEMA IF EXISTS identity;
+```
+
+`create-table-idt001-user`:
+
+```sql
+-- up
+CREATE TABLE identity.idt001_user (
+	id UUID NOT NULL DEFAULT uuidv7(),
+	username VARCHAR(30) NOT NULL,
+	email VARCHAR(255) NOT NULL,
+	password_hash TEXT NOT NULL,
+	name VARCHAR(150) NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+	updated_at TIMESTAMPTZ NULL
+);
+
+ALTER TABLE identity.idt001_user
+ADD CONSTRAINT pk_idt001 PRIMARY KEY (id);
+
+ALTER TABLE identity.idt001_user
+ADD CONSTRAINT uq_idt001_username UNIQUE (username);
+
+ALTER TABLE identity.idt001_user
+ADD CONSTRAINT uq_idt001_email UNIQUE (email);
+
+ALTER TABLE identity.idt001_user
+ADD CONSTRAINT ck_idt001_username CHECK (username ~ '^[a-z0-9_-]{3,30}$');
+
+-- down
+DROP TABLE identity.idt001_user;
+```
+
+- O `username` é a URL da página pública (`linkly/leo`), então o `CHECK` garante minúsculas e caracteres seguros para URL **no banco**, independente do que a app fizer. Nomes reservados (`dashboard`, `r`, …) são regra da app, não do banco.
+- A API converte o email para minúsculas antes de salvar, então um `UNIQUE` simples basta.
+- Sem `created_by`/`updated_by` (o pandora tem): o próprio usuário se cadastra, não existe outro autor.
+- Dados de perfil (bio, avatar, tema) não ficam aqui; pertencem ao módulo de links.
+
+## 4. Aplicar
+
+```bash
+migris status local
+migris apply local
+```
+
+O `status` lista as migrations pendentes; o `apply` roda todas em ordem de timestamp, como um lote (batch). Para conferir no banco:
+
+```bash
+docker exec pottmayer-postgres psql -U postgres -d linkly -c "\d identity.idt001_user"
+```
+
+Desfazer o último lote (só durante o desenvolvimento): `migris rollback local`.
