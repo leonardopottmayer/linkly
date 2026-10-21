@@ -134,6 +134,30 @@ The file isn't tracked yet, so just move it in the explorer, or:
 mv apps/api/.gitattributes .gitattributes
 ```
 
+## 9. `.editorconfig` and formatting
+
+Create `.editorconfig` at the root so every editor (VS Code, Visual Studio, Rider…) writes files the way Prettier expects:
+
+```ini
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+```
+
+Why: on Windows, files were written with CRLF line endings and some with 4-space indentation. Git stores them as LF anyway (`.gitattributes`), but Prettier checks the files on disk and flags them. To fix existing files:
+
+```bash
+pnpm --filter api format
+```
+
+(VS Code needs the *EditorConfig* extension; Visual Studio and Rider support it natively.)
+
 ## Target layout
 
 ```

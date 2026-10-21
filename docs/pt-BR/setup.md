@@ -134,6 +134,30 @@ Como o arquivo ainda não está versionado, basta movê-lo pelo explorer, ou:
 mv apps/api/.gitattributes .gitattributes
 ```
 
+## 9. `.editorconfig` e formatação
+
+Crie o `.editorconfig` na raiz para que todo editor (VS Code, Visual Studio, Rider…) grave os arquivos do jeito que o Prettier espera:
+
+```ini
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+```
+
+Por quê: no Windows os arquivos foram gravados com quebra de linha CRLF e alguns com indentação de 4 espaços. O git guarda tudo em LF de qualquer forma (`.gitattributes`), mas o Prettier verifica os arquivos no disco e acusa. Para corrigir os arquivos existentes:
+
+```bash
+pnpm --filter api format
+```
+
+(O VS Code precisa da extensão *EditorConfig*; Visual Studio e Rider suportam nativamente.)
+
 ## Estrutura alvo
 
 ```
